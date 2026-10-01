@@ -59,15 +59,12 @@ class AgendamentoEventoTela extends StatefulWidget {
   State<AgendamentoEventoTela> createState() => _AgendamentoEventoTelaState();
 }
 
-enum Visibilidade { public, private, vip }
-
 class _AgendamentoEventoTelaState extends State<AgendamentoEventoTela> {
   // --- 1. Valores Padrão (para reset) ---
   static final DateTime _dataPadrao = DateTime.now();
   static const TimeOfDay _horarioPadrao = TimeOfDay(hour: 19, minute: 0);
   static const String _tipoPadrao = 'Emagrecimento';
   static const String _nivelPessoaPadrao = 'iniciante';
-  static const Visibilidade _visibilidadePadrao = Visibilidade.public;
   static final Map<String, bool> _servicosPadrao = {
     'Buffet': false,
     'Fotografia': false,
@@ -79,13 +76,14 @@ class _AgendamentoEventoTelaState extends State<AgendamentoEventoTela> {
     'intermediario',
     'avançado',
   ];
-  static const List<String> _tagsDisponiveis = [
+  static const List<String> _restricoesAlimentaresDisponiveis = [
     'Vegetariano',
-    'Sem Glúten',
-    'Sem Lactose',
     'Vegano',
+    'Sem lactose',
+    'Sem glúten',
+    'Low Carb',
   ];
-  static const List<String> _tagsPadrao = [];
+  static const List<String> _restricoesAlimentaresPadrao = [];
   static const bool _notificacaoAtivaPadrao = false;
 
   // --- 2. Variáveis de Estado ---
@@ -93,9 +91,10 @@ class _AgendamentoEventoTelaState extends State<AgendamentoEventoTela> {
   TimeOfDay _horarioSelecionado = _horarioPadrao;
   String _tipoObjetivoSelecionado = _tipoPadrao;
   String _nivelPessoa = _nivelPessoaPadrao;
-  Visibilidade _visibilidadeSelecionada = _visibilidadePadrao;
   Map<String, bool> _servicosSelecionados = Map.from(_servicosPadrao);
-  List<String> _tagsSelecionadas = List<String>.from(_tagsPadrao);
+  List<String> _restricoesAlimentaresSelecionadas = List<String>.from(
+    _restricoesAlimentaresPadrao,
+  );
   bool _notificacaoAtiva = _notificacaoAtivaPadrao;
 
   @override
@@ -109,9 +108,10 @@ class _AgendamentoEventoTelaState extends State<AgendamentoEventoTela> {
     _horarioSelecionado = _horarioPadrao;
     _tipoObjetivoSelecionado = _tipoPadrao;
     _nivelPessoa = _nivelPessoaPadrao;
-    _visibilidadeSelecionada = _visibilidadePadrao;
     _servicosSelecionados = Map.from(_servicosPadrao);
-    _tagsSelecionadas = List<String>.from(_tagsPadrao);
+    _restricoesAlimentaresSelecionadas = List<String>.from(
+      _restricoesAlimentaresPadrao,
+    );
     _notificacaoAtiva = _notificacaoAtivaPadrao;
   }
 
@@ -130,9 +130,8 @@ class _AgendamentoEventoTelaState extends State<AgendamentoEventoTela> {
     debugPrint('Horário: ${_horarioSelecionado.format(context)}');
     debugPrint('Tipo de Evento: $_tipoObjetivoSelecionado');
     debugPrint('Nível da Pessoa: $_nivelPessoa');
-    debugPrint('Visibilidade: $_visibilidadeSelecionada');
     debugPrint('Serviços selecionados: $_servicosSelecionados');
-    debugPrint('Restrições Alimentares: $_tagsSelecionadas');
+    debugPrint('Restrições Alimentares: $_restricoesAlimentaresSelecionadas');
     debugPrint('Lembrete Automático: $_notificacaoAtiva');
     debugPrint('==============================');
 
@@ -245,37 +244,40 @@ class _AgendamentoEventoTelaState extends State<AgendamentoEventoTela> {
               }).toList(),
             ),
             const Divider(height: 32),
-            // --- 5. Rádio ---
+            // --- 5. FilterChip ---
             Text(
-              'Visibilidade do Evento',
+              'Restrições alimentares',
               style: Theme.of(context).textTheme.titleMedium,
             ),
-            RadioGroup<Visibilidade>(
-              groupValue: _visibilidadeSelecionada,
-              onChanged: (visibilidade) {
-                if (visibilidade != null) {
-                  setState(() {
-                    _visibilidadeSelecionada = visibilidade;
-                  });
-                  debugPrint('[DEBUG - Radio] Visibilidade: $visibilidade');
-                }
-              },
-              child: Column(
-                children: [
-                  ListTile(
-                    title: const Text('Público'),
-                    leading: Radio<Visibilidade>(value: Visibilidade.public),
-                  ),
-                  ListTile(
-                    title: const Text('Privado'),
-                    leading: Radio<Visibilidade>(value: Visibilidade.private),
-                  ),
-                  ListTile(
-                    title: const Text('Apenas Convidados'),
-                    leading: Radio<Visibilidade>(value: Visibilidade.vip),
-                  ),
-                ],
-              ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: _restricoesAlimentaresDisponiveis.map((restricao) {
+                final selecionada = _restricoesAlimentaresSelecionadas.contains(
+                  restricao,
+                );
+                return FilterChip(
+                  label: Text(restricao),
+                  selected: selecionada,
+                  onSelected: (bool selecionado) {
+                    setState(() {
+                      if (selecionado) {
+                        if (!_restricoesAlimentaresSelecionadas.contains(
+                          restricao,
+                        )) {
+                          _restricoesAlimentaresSelecionadas.add(restricao);
+                        }
+                      } else {
+                        _restricoesAlimentaresSelecionadas.remove(restricao);
+                      }
+                    });
+                    debugPrint(
+                      '[DEBUG - FilterChip] Restrição "$restricao" ${selecionado ? "adicionada" : "removida"}. Lista atual: $_restricoesAlimentaresSelecionadas',
+                    );
+                  },
+                );
+              }).toList(),
             ),
             const Divider(height: 32),
             // --- 6. Checkbox ---
@@ -301,36 +303,7 @@ class _AgendamentoEventoTelaState extends State<AgendamentoEventoTela> {
               }).toList(),
             ),
             const Divider(height: 32),
-            // --- 7. Chip (FilterChip) ---
-            Text(
-              'Restrições Alimentares (Tags)',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              children: _tagsDisponiveis.map((tag) {
-                final selecionada = _tagsSelecionadas.contains(tag);
-                return FilterChip(
-                  label: Text(tag),
-                  selected: selecionada,
-                  onSelected: (bool selecionado) {
-                    setState(() {
-                      if (selecionado) {
-                        _tagsSelecionadas.add(tag);
-                      } else {
-                        _tagsSelecionadas.remove(tag);
-                      }
-                    });
-                    debugPrint(
-                      '[DEBUG - Chip] Tag "$tag" ${selecionado ? "adicionada" : "removida"}. Lista atual: $_tagsSelecionadas',
-                    );
-                  },
-                );
-              }).toList(),
-            ),
-            const Divider(height: 32),
-            // --- 8. Switch ---
+            // --- 7. Switch ---
             SwitchListTile(
               title: const Text('Enviar Lembrete Automático'),
               subtitle: const Text(
