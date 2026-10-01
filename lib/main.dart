@@ -65,12 +65,17 @@ class _AgendamentoEventoTelaState extends State<AgendamentoEventoTela> {
   static const TimeOfDay _horarioPadrao = TimeOfDay(hour: 19, minute: 0);
   static const String _tipoPadrao = 'Emagrecimento';
   static const String _nivelPessoaPadrao = 'iniciante';
-  static final Map<String, bool> _servicosPadrao = {
-    'Buffet': false,
-    'Fotografia': false,
-    'Decoração': false,
-    'DJ': false,
-  };
+  static const int _tempoDiarioPadrao = 60;
+  static const int _tempoDiarioMinimo = 15;
+  static const int _tempoDiarioMaximo = 120;
+  static const int _tempoDiarioIncremento = 5;
+  static const List<String> _frequenciasSemanaisDisponiveis = [
+    '2 dias por semana',
+    '3 dias por semana',
+    '4 dias por semana',
+    '5 dias por semana',
+    '6 dias por semana',
+  ];
   static const List<String> _niveisPessoaDisponiveis = [
     'iniciante',
     'intermediario',
@@ -84,18 +89,24 @@ class _AgendamentoEventoTelaState extends State<AgendamentoEventoTela> {
     'Low Carb',
   ];
   static const List<String> _restricoesAlimentaresPadrao = [];
-  static const bool _notificacaoAtivaPadrao = false;
+  static const bool _notificacoesAguaPadrao = false;
+  static const bool _termosAceitosPadrao = false;
 
   // --- 2. Variáveis de Estado ---
   DateTime _dataSelecionada = _dataPadrao;
   TimeOfDay _horarioSelecionado = _horarioPadrao;
   String _tipoObjetivoSelecionado = _tipoPadrao;
   String _nivelPessoa = _nivelPessoaPadrao;
-  Map<String, bool> _servicosSelecionados = Map.from(_servicosPadrao);
+  int _tempoDiarioSelecionado = _tempoDiarioPadrao;
+  String? _frequenciaSemanalSelecionada;
+  final TextEditingController _alergiaController = TextEditingController();
+  final FocusNode _alergiaFocusNode = FocusNode();
+  List<String> _alergiasSelecionadas = [];
   List<String> _restricoesAlimentaresSelecionadas = List<String>.from(
     _restricoesAlimentaresPadrao,
   );
-  bool _notificacaoAtiva = _notificacaoAtivaPadrao;
+  bool _notificacoesAguaAtivas = _notificacoesAguaPadrao;
+  bool _termosAceitos = _termosAceitosPadrao;
 
   @override
   void initState() {
@@ -108,11 +119,22 @@ class _AgendamentoEventoTelaState extends State<AgendamentoEventoTela> {
     _horarioSelecionado = _horarioPadrao;
     _tipoObjetivoSelecionado = _tipoPadrao;
     _nivelPessoa = _nivelPessoaPadrao;
-    _servicosSelecionados = Map.from(_servicosPadrao);
+    _tempoDiarioSelecionado = _tempoDiarioPadrao;
+    _frequenciaSemanalSelecionada = null;
+    _alergiasSelecionadas = [];
+    _alergiaController.clear();
     _restricoesAlimentaresSelecionadas = List<String>.from(
       _restricoesAlimentaresPadrao,
     );
-    _notificacaoAtiva = _notificacaoAtivaPadrao;
+    _notificacoesAguaAtivas = _notificacoesAguaPadrao;
+    _termosAceitos = _termosAceitosPadrao;
+  }
+
+  @override
+  void dispose() {
+    _alergiaController.dispose();
+    _alergiaFocusNode.dispose();
+    super.dispose();
   }
 
   void resetarValores() {
@@ -120,9 +142,38 @@ class _AgendamentoEventoTelaState extends State<AgendamentoEventoTela> {
     debugPrint('[DEBUG] Formulario resetado para os valores padrao.');
   }
 
-  void salvarFormulario() {
+  void gerarPlano() {
+    final List<String> erros = [];
+
+    if (_tipoObjetivoSelecionado.trim().isEmpty) {
+      erros.add('Objetivo do treino não selecionado');
+    }
+
+    if (_nivelPessoa.trim().isEmpty) {
+      erros.add('Nível não informado');
+    }
+
+    if (_frequenciaSemanalSelecionada == null) {
+      erros.add('Frequência semanal não selecionada');
+    }
+
+    if (!_termosAceitos) {
+      erros.add('Termos não aceitos');
+    }
+
+    if (erros.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Corrija antes de gerar o plano:\n• ${erros.join('\n• ')}',
+          ),
+        ),
+      );
+      return;
+    }
+
     debugPrint('==============================');
-    debugPrint('       RESUMO DO AGENDAMENTO   ');
+    debugPrint('       RESUMO DO PLANO         ');
     debugPrint('==============================');
     debugPrint(
       'Data: ${_dataSelecionada.day}/${_dataSelecionada.month}/${_dataSelecionada.year}',
@@ -130,49 +181,19 @@ class _AgendamentoEventoTelaState extends State<AgendamentoEventoTela> {
     debugPrint('Horário: ${_horarioSelecionado.format(context)}');
     debugPrint('Tipo de Evento: $_tipoObjetivoSelecionado');
     debugPrint('Nível da Pessoa: $_nivelPessoa');
-    debugPrint('Serviços selecionados: $_servicosSelecionados');
+    debugPrint('Tempo diário de treino: $_tempoDiarioSelecionado minutos');
+    debugPrint('Frequência semanal: $_frequenciaSemanalSelecionada');
+    debugPrint('Alergias: $_alergiasSelecionadas');
     debugPrint('Restrições Alimentares: $_restricoesAlimentaresSelecionadas');
-    debugPrint('Lembrete Automático: $_notificacaoAtiva');
+    debugPrint('Notificações de água: $_notificacoesAguaAtivas');
+    debugPrint('Termos aceitos: $_termosAceitos');
     debugPrint('==============================');
 
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Evento salvo com sucesso! Veja os logs no console.'),
+        content: Text('Plano gerado com sucesso! Veja os logs no console.'),
       ),
     );
-  }
-
-  // --- Funções Auxiliares para Pickers ---
-  Future<void> _selecionarData(BuildContext context) async {
-    final DateTime? data = await showDatePicker(
-      context: context,
-      initialDate: _dataSelecionada,
-      firstDate: DateTime.now(),
-      lastDate: DateTime(2030),
-    );
-
-    if (data != null && data != _dataSelecionada) {
-      setState(() {
-        _dataSelecionada = data;
-      });
-      debugPrint('[DEBUG - DatePicker] Data selecionada: $data');
-    }
-  }
-
-  Future<void> _selecionarHorario(BuildContext context) async {
-    final TimeOfDay? horario = await showTimePicker(
-      context: context,
-      initialTime: _horarioSelecionado,
-    );
-
-    if (horario != null && horario != _horarioSelecionado) {
-      setState(() {
-        _horarioSelecionado = horario;
-      });
-      debugPrint(
-        '[DEBUG - TimePicker] Horário selecionado: ${horario.format(context)}',
-      );
-    }
   }
 
   @override
@@ -280,47 +301,170 @@ class _AgendamentoEventoTelaState extends State<AgendamentoEventoTela> {
               }).toList(),
             ),
             const Divider(height: 32),
-            // --- 6. Checkbox ---
-            Text(
-              'Serviços Adicionais',
-              style: Theme.of(context).textTheme.titleMedium,
+            // --- 6. InputChip ---
+            Text('Alergias', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _alergiaController,
+              focusNode: _alergiaFocusNode,
+              textInputAction: TextInputAction.done,
+              decoration: InputDecoration(
+                labelText: 'Adicionar alergia',
+                hintText: 'Ex.: Amendoim',
+                border: const OutlineInputBorder(),
+                suffixIcon: IconButton(
+                  tooltip: 'Adicionar alergia',
+                  onPressed: _adicionarAlergia,
+                  icon: const Icon(Icons.add),
+                ),
+              ),
+              onSubmitted: (_) => _adicionarAlergia(),
             ),
-            Column(
-              children: _servicosSelecionados.keys.map((servico) {
-                return CheckboxListTile(
-                  dense: true,
-                  title: Text(servico),
-                  value: _servicosSelecionados[servico],
-                  onChanged: (marcado) {
-                    setState(() {
-                      _servicosSelecionados[servico] = marcado ?? false;
-                    });
-                    debugPrint(
-                      '[DEBUG - Checkbox] Serviço "$servico" alterado para: $marcado',
-                    );
-                  },
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: _alergiasSelecionadas.map((alergia) {
+                return InputChip(
+                  label: Text(alergia),
+                  onDeleted: () => _removerAlergia(alergia),
                 );
               }).toList(),
             ),
             const Divider(height: 32),
-            // --- 7. Switch ---
-            SwitchListTile(
-              title: const Text('Enviar Lembrete Automático'),
-              subtitle: const Text(
-                'Notificar convidados 24 horas antes do evento.',
-              ),
-              value: _notificacaoAtiva,
-              onChanged: (bool ativo) {
+            // --- 7. Slider ---
+            Text(
+              'Tempo diário de treino',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            const Text('Utilize um Slider.'),
+            const SizedBox(height: 8),
+            Slider(
+              value: _tempoDiarioSelecionado.toDouble(),
+              min: _tempoDiarioMinimo.toDouble(),
+              max: _tempoDiarioMaximo.toDouble(),
+              divisions:
+                  (_tempoDiarioMaximo - _tempoDiarioMinimo) ~/
+                  _tempoDiarioIncremento,
+              label: '$_tempoDiarioSelecionado min',
+              onChanged: (double valor) {
+                final int valorSelecionado = valor.round();
                 setState(() {
-                  _notificacaoAtiva = ativo;
+                  _tempoDiarioSelecionado =
+                      ((valorSelecionado - _tempoDiarioMinimo) /
+                                  _tempoDiarioIncremento)
+                              .round() *
+                          _tempoDiarioIncremento +
+                      _tempoDiarioMinimo;
                 });
                 debugPrint(
-                  '[DEBUG - Switch] Notificação automática alterada para: $ativo',
+                  '[DEBUG - Slider] Tempo diário selecionado: $_tempoDiarioSelecionado minutos',
                 );
               },
             ),
+            Text('Tempo selecionado: $_tempoDiarioSelecionado minutos'),
+            const Divider(height: 32),
+            // --- 8. RadioListTile ---
+            Text(
+              'Frequência semanal',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            RadioGroup<String>(
+              groupValue: _frequenciaSemanalSelecionada,
+              onChanged: (String? valor) {
+                setState(() {
+                  _frequenciaSemanalSelecionada = valor;
+                });
+                debugPrint(
+                  '[DEBUG - RadioListTile] Frequência semanal selecionada: $_frequenciaSemanalSelecionada',
+                );
+              },
+              child: Column(
+                children: _frequenciasSemanaisDisponiveis.map((frequencia) {
+                  return RadioListTile<String>(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(frequencia),
+                    value: frequencia,
+                  );
+                }).toList(),
+              ),
+            ),
+            const Divider(height: 32),
+            // --- 9. Switch ---
+            Text(
+              'Notificações de água',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            Card(
+              color: const Color(0xFF4F83CC),
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: const BorderSide(color: Color(0xFF305A9B)),
+              ),
+              child: SwitchListTile(
+                activeThumbColor: Colors.white,
+                activeTrackColor: const Color(0xFF305A9B),
+                title: const Text(
+                  'Receber notificações para beber água',
+                  style: TextStyle(color: Colors.white),
+                ),
+                subtitle: Row(
+                  children: [
+                    Text(
+                      _notificacoesAguaAtivas ? '[ON]' : '[OFF]',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+                value: _notificacoesAguaAtivas,
+                onChanged: (bool ativo) {
+                  setState(() {
+                    _notificacoesAguaAtivas = ativo;
+                  });
+                  debugPrint(
+                    '[DEBUG - Switch] Notificações de água alteradas para: $ativo',
+                  );
+                },
+              ),
+            ),
             const SizedBox(height: 24),
-            // --- Botões de Ação Final (Cancelar e Salvar) ---
+            // --- 10. Checkbox ---
+            CheckboxListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text(
+                'Aceito os termos e condições para geração do plano de treino.',
+              ),
+              value: _termosAceitos,
+              onChanged: (bool? aceito) {
+                setState(() {
+                  _termosAceitos = aceito ?? false;
+                });
+                debugPrint(
+                  '[DEBUG - Checkbox] Termos aceitos: $_termosAceitos',
+                );
+              },
+            ),
+            const SizedBox(height: 16),
+            // --- Botões de Ação Final (Cancelar e Gerar Plano) ---
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: gerarPlano,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF0F766E),
+                  foregroundColor: Colors.white,
+                ),
+                child: const Text('Gerar Plano'),
+              ),
+            ),
+            const SizedBox(height: 12),
             Row(
               children: [
                 Expanded(
@@ -336,17 +480,6 @@ class _AgendamentoEventoTelaState extends State<AgendamentoEventoTela> {
                     child: const Text('Cancelar'),
                   ),
                 ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: salvarFormulario,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF0F766E),
-                      foregroundColor: Colors.white,
-                    ),
-                    child: const Text('Salvar'),
-                  ),
-                ),
               ],
             ),
             const SizedBox(height: 16),
@@ -354,5 +487,45 @@ class _AgendamentoEventoTelaState extends State<AgendamentoEventoTela> {
         ),
       ),
     );
+  }
+
+  void _adicionarAlergia() {
+    final alergiaInformada = _alergiaController.text.trim();
+
+    if (alergiaInformada.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Informe uma alergia antes de adicionar.'),
+        ),
+      );
+      return;
+    }
+
+    final alergiaNormalizada = alergiaInformada.toLowerCase();
+    final jaExiste = _alergiasSelecionadas.any(
+      (alergia) => alergia.toLowerCase() == alergiaNormalizada,
+    );
+
+    if (jaExiste) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Essa alergia já foi adicionada.')),
+      );
+      return;
+    }
+
+    setState(() {
+      _alergiasSelecionadas.add(alergiaInformada);
+      _alergiaController.clear();
+    });
+
+    _alergiaFocusNode.requestFocus();
+    debugPrint('[DEBUG - InputChip] Alergia adicionada: $alergiaInformada');
+  }
+
+  void _removerAlergia(String alergia) {
+    setState(() {
+      _alergiasSelecionadas.remove(alergia);
+    });
+    debugPrint('[DEBUG - InputChip] Alergia removida: $alergia');
   }
 }
